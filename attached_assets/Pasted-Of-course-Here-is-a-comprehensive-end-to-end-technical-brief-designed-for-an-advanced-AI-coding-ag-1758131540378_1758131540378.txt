@@ -1,0 +1,200 @@
+Of course. Here is a comprehensive, end-to-end technical brief designed for an advanced AI coding agent. This document provides the complete "source of truth" for building the full-stay Learning Management System.
+
+***
+
+## **End-to-End LMS Development Brief for AI Agent**
+
+### **1. Project Overview**
+
+**Project Name:** EduNexus LMS
+**Objective:** Build a full-stack, hierarchical, institution-focused Learning Management System (LMS) from the ground up. The system must support multi-tenancy (Institutes), complex academic hierarchies (Program -> Branch -> Year -> Semester), and provide distinct, role-based experiences for Admins, Faculty, Students, and Guests.
+**Tech Stack Mandate:**
+*   **Frontend:** React.js (TypeScript) with Vite, Tailwind CSS, Shadcn/UI component library.
+*   **Backend:** Django REST Framework (Python) for robust ORM and rapid development.
+*   **Database:** PostgreSQL for primary data, Redis for caching and sessions.
+*   **Auth:** JWT-based authentication with SimpleJWT, with readiness for SSO (SAML/OAuth).
+*   **Deployment:** Dockerized containers. Ready for orchestration with Kubernetes.
+
+---
+
+### **2. Core Technical Specifications & Data Architecture**
+
+#### **2.1. Database Schema (PostgreSQL Models)**
+Generate the SQL DDL and corresponding Django models for these core entities.
+
+**a. Institutional Hierarchy & Academics**
+```sql
+-- Core Structure
+TABLE Institute (id, name, subdomain, config)
+TABLE Program (id, institute_id(FK), name, code, duration)
+TABLE Branch (id, program_id(FK), name, code)
+TABLE AcademicYear (id, program_id(FK), year_number, name)
+TABLE Semester (id, academic_year_id(FK), semester_number, name, start_date, end_date, is_active)
+TABLE Subject (id, branch_id(FK), semester_id(FK), code, name, credits, description)
+
+-- Course Instance
+TABLE CourseOffering (
+    id,
+    subject_id(FK), -- What is taught?
+    semester_id(FK), -- When is it taught?
+    faculty_id(FK),  -- Who teaches it?
+    section
+)
+```
+
+**b. User Management & Auth**
+```sql
+TABLE User (id, username, email, password_hash, first_name, last_name, is_active, is_staff, last_login)
+TABLE UserProfile (id, user_id(FK, Unique), profile_picture, phone, address) -- Extended profile
+TABLE Student (id, user_id(FK, Unique), enrollment_number, program_id(FK), branch_id(FK), current_semester_id(FK))
+TABLE Faculty (id, user_id(FK, Unique), employee_id, department)
+TABLE Role (id, name) -- e.g., 'admin', 'instructor', 'student', 'auditor'
+TABLE UserRole (id, user_id(FK), role_id(FK), institute_id(FK)) -- User can have different roles in different institutes
+```
+
+**c. Academic Transactions**
+```sql
+TABLE Enrollment (id, student_id(FK), course_offering_id(FK), enrolled_date, status)
+TABLE Assignment (id, course_offering_id(FK), title, description, due_date, max_marks, created_date)
+TABLE AssignmentSubmission (id, assignment_id(FK), student_id(FK), submission_data, submitted_date, marks_obtained, feedback, status)
+TABLE AttendanceSession (id, course_offering_id(FK), session_date, topic_covered)
+TABLE AttendanceRecord (id, attendance_session_id(FK), student_id(FK), status)
+TABLE Quiz (id, course_offering_id(FK), title, description, time_limit_minutes, due_date)
+TABLE Question (id, quiz_id(FK), question_text, question_type, points, options_json) -- options_json for MCQs
+TABLE QuizAttempt (id, quiz_id(FK), student_id(FK), start_time, end_time, score)
+```
+
+#### **2.2. Backend API Specification (Django REST Framework)**
+Create a set of RESTful APIs with JWT authentication. Implement ViewSets and Serializers for all core models.
+
+**Sample Endpoint Structure:**
+*   `/api/auth/` (login, logout, register, password reset)
+*   `/api/users/` (CRUD for users, profile management)
+*   `/api/institutes/` (Institute-level configuration)
+*   `/api/academics/programs/` (Hierarchy management)
+*   `/api/academics/course-offerings/` (List, create courses)
+*   `/api/courses/{id}/enroll/` (Enrollment action)
+*   `/api/courses/{id}/assignments/` (Assignment CRUD)
+*   `/api/assignments/{id}/submit/` (Submission endpoint)
+*   `/api/courses/{id}/attendance/` (Mark and view attendance)
+*   `/api/grades/` (Gradebook management)
+
+**Key Requirements:**
+*   **Permissions:** Implement robust Role-Based Access Control (RBAC) using Django's permission system. (e.g., `IsAdminUser`, `IsFacultyOfCourse`, `IsEnrolledStudent`).
+*   **Validation:** Extensive use of Serializer validation (e.g., prevent enrolling in two sections of the same subject).
+*   **Performance:** Use `select_related` and `prefetch_related` to optimize database queries in list views.
+
+#### **2.3. Frontend Application Structure (React + TypeScript + Vite)**
+Build a single-page application (SPA) with the following structure:
+
+```
+src/
+├── components/          # Reusable UI components (Button, Card, Modal)
+│   ├── ui/             # Shadcn/UI components
+│   └── shared/         # App-specific shared components
+├── layouts/            # Page layouts (DashboardLayout, AuthLayout)
+├── hooks/              # Custom React hooks (e.g., useAuth, useApi)
+├── pages/              # Top-level pages
+│   ├── Dashboard/
+│   ├── Auth/
+│   ├── Admin/
+│   ├── Faculty/
+│   │   ├── CourseList/
+│   │   ├── CourseDetail/[id]/
+│   │   │   ├── components/
+│   │   │   ├── Assignments.tsx
+│   │   │   └── Attendance.tsx
+│   │   └── Gradebook/
+│   ├── Student/
+│   └── Guest/
+├── services/           # API service layer (apiClient, authService, courseService)
+├── types/              # TypeScript type definitions
+├── utils/              # Utility functions
+└── contexts/           # React contexts (AuthContext, ThemeContext)
+```
+
+**Key Requirements:**
+*   **State Management:** Use React Query (TanStack Query) for efficient server-state synchronization, caching, and updates. Use Zustand for simple global client state (e.g., theme).
+*   **Routing:** React Router v6 for navigation with protected routes.
+*   **UI:** Use Shadcn/UI components built on Radix UI for accessibility, styled with Tailwind CSS.
+*   **API Interaction:** Centralized `apiClient` using Axios with request/response interceptors to handle JWT tokens automatically.
+
+---
+
+### **3. User Interface & Feature Implementation Guide**
+
+For each module below, build the necessary frontend pages and connect them to the corresponding backend APIs.
+
+**1. Authentication Flow**
+*   `pages/Auth/Login.tsx`, `Register.tsx`, `ForgotPassword.tsx`
+*   Implement form handling with react-hook-form.
+*   Use context (`AuthContext`) to manage user state globally.
+
+**2. Admin Dashboard (`/pages/Admin/Dashboard.tsx`)**
+*   **UI:** Data grids, charts (use Recharts or Chart.js), summary cards.
+*   **Features:**
+    *   System stats overview (Total Users, Courses, Active Sessions).
+    *   Data tables for user management with CRUD operations.
+    *   Forms to create and manage the academic hierarchy (Programs, Branches, etc.).
+    *   Component to assign users to roles and courses.
+
+**3. Faculty Dashboard**
+*   **Course List Page:** List of `CourseOfferings` for the current semester.
+*   **Course Detail Page:** Tab-based interface for:
+    *   **Overview:** Announcements, stats.
+    *   **Assignments:** List assignments. Clicking one opens a grading interface showing a table of `AssignmentSubmission` with a form to input marks/feedback.
+    *   **Attendance:** A form for a specific date (`AttendanceSession`) with a list of enrolled students and a dropdown to mark `status` for each. Ability to view past records.
+    *   **Gradebook:** A data grid showing students and their grades across all assignments in the course, with a calculated total.
+
+**4. Student Dashboard**
+*   **Dashboard:** Overview of enrolled courses, upcoming deadlines (from `Assignment` and `Quiz` tables), recent grades.
+*   **Course Detail Page:** View materials, submit assignments (file upload or text input), view grades and feedback, see attendance history.
+
+---
+
+### **4. Implementation Phases**
+
+**Phase 1: Core Setup & Auth (Sprint 1)**
+*   [ ] Initialize Django project & app. Set up core settings, CORS, JWT.
+*   [ ] Define User, UserProfile, Institute, Role models.
+*   [ ] Build Auth API endpoints (`/api/auth/login/`, `/register/`).
+*   [ ] Initialize React Vite project with TypeScript, Tailwind, Shadcn/UI.
+*   [ ] Create `AuthContext` and authentication pages (Login/Register).
+*   [ ] Create a protected `DashboardLayout`.
+
+**Phase 2: Academic Hierarchy & User Management (Sprint 2)**
+*   [ ] Implement all models from section 2.1.a and 2.1.b.
+*   [ ] Build CRUD APIs for `Program`, `Branch`, `Semester`, `Subject`.
+*   [ ] Build Admin Dashboard pages to manage these entities.
+*   [ ] Build User & Role management UI in the Admin Dashboard.
+
+**Phase 3: Course & Enrollment Lifecycle (Sprint 3)**
+*   [ ] Implement `CourseOffering`, `Enrollment` models and APIs.
+*   [ ] Build a course catalog page for students.
+*   [ ] Build enrollment functionality.
+*   [ ] Build the Faculty "My Courses" and Student "My Courses" pages.
+
+**Phase 4: Core Features - Assignments, Attendance, Grades (Sprint 4)**
+*   [ ] Implement `Assignment`, `AssignmentSubmission`, `AttendanceSession`, `AttendanceRecord` models and APIs.
+*   [ ] Build the Assignment creation and submission interfaces.
+*   [ ] Build the Attendance marking interface for faculty and view for students.
+*   [ ] Build the Gradebook view for faculty.
+
+**Phase 5: Polish, Testing & Deployment (Sprint 5)**
+*   [ ] Implement additional features (Quizzes, Announcements, Forums).
+*   [ ] Write comprehensive tests (Pytest for Django, Jest/Vitest for React).
+*   [ ] Dockerize both frontend and backend applications.
+*   [ ] Create `docker-compose.yml` for local development and production-ready Dockerfiles.
+*   [ ] Write deployment guides for AWS/GCP.
+
+---
+
+### **5. AI Agent First Task**
+
+1.  **Confirm understanding** of the entire tech stack and plan.
+2.  **Generate the initial project scaffolding:**
+    *   The Django project structure with all necessary dependencies in `requirements.txt`.
+    *   The React (TypeScript) project structure with `package.json` dependencies for Vite, React Router, TanStack Query, Axios, Tailwind, Shadcn/UI.
+3.  **Implement Phase 1:** Create the complete authentication flow as described, providing all necessary code for both backend (DRF + SimpleJWT) and frontend (React + Context).
+
+**Begin.**
